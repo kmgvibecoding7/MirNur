@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>КазМунайГаз: операционная эффективность</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<style>
+  :root{
+    --navy:#0A2D6E;
+    --blue:#0062AD;
+    --cyan:#00A3E0;
+    --sky:#E6F3FB;
+    --bg:#F3F6FA;
+    --surface:#FFFFFF;
+    --est:#9BB4D6;
+    --red:#D7263D;
+    --temp:#E39B00;
+    --debt:#6A4CB8;
+    --up:#1A8F5A;
+    --down:#C8372D;
+    --neutral:#8792A2;
+    --text:#13203A;
+    --text-dim:#5A6B85;
+    --border:#DCE4EE;
+    --grid:#E5EBF3;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --navy:#0A2D6E;
+      --blue:#3D8FD6;
+      --cyan:#22B8F0;
+      --sky:#16294A;
+      --bg:#0C1628;
+      --surface:#132139;
+      --est:#4B6894;
+      --red:#FF5A6A;
+      --temp:#F5B83D;
+      --debt:#A88BF0;
+      --up:#3CC487;
+      --down:#F06A5F;
+      --neutral:#7C8AA5;
+      --text:#EAF0FA;
+      --text-dim:#9AACC8;
+      --border:#223252;
+      --grid:#1C2C4A;
+    }
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Golos Text', system-ui, -apple-system, 'Segoe UI', sans-serif;
+    font-variant-numeric: tabular-nums;
+    -webkit-font-smoothing:antialiased;
+  }
+  a,button{font-family:inherit;}
+  button{cursor:pointer;}
+  :focus-visible{outline:2.5px solid var(--cyan); outline-offset:2px; border-radius:6px;}
+  @media (prefers-reduced-motion: reduce){
+    *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+  }
+
+  /* Header */
+  header.topbar{
+    background:var(--navy);
+    color:#fff;
+    padding:18px 24px;
+  }
+  .topbar-inner{
+    max-width:1280px;
+    margin:0 auto;
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:16px 24px;
+  }
+  .brand{display:flex; align-items:center; gap:12px; flex:1 1 320px;}
+  .brand-icon{
+    width:40px;height:40px;flex:none;
+    background:rgba(255,255,255,0.12);
+    border-radius:10px;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .brand-icon svg{width:22px;height:22px;stroke:#fff;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .brand-text h1{margin:0; font-size:17px; font-weight:700; letter-spacing:.2px;}
+  .brand-text p{margin:2px 0 0; font-size:12.5px; color:rgba(255,255,255,0.72); font-weight:400;}
+  .year-switch{
+    display:flex; gap:6px; background:rgba(255,255,255,0.08);
+    padding:4px; border-radius:10px; flex:none;
+  }
+  .year-btn{
+    border:none; background:transparent; color:rgba(255,255,255,0.75);
+    font-size:13.5px; font-weight:600; padding:8px 12px; border-radius:7px;
+    transition:background .15s, color .15s;
+  }
+  .year-btn sup{font-size:9px; margin-left:1px;}
+  .year-btn:hover{background:rgba(255,255,255,0.12); color:#fff;}
+  .year-btn[aria-pressed="true"]{background:var(--cyan); color:#06223b;}
+
+  /* Tabs */
+  nav.tabs{
+    max-width:1280px; margin:0 auto;
+    display:flex; gap:4px;
+    padding:0 24px; margin-top:18px;
+    border-bottom:1px solid var(--border);
+  }
+  .tab-btn{
+    display:flex; align-items:center; gap:8px;
+    background:transparent; border:none;
+    padding:12px 18px 13px;
+    font-size:14.5px; font-weight:600; color:var(--text-dim);
+    border-bottom:2.5px solid transparent;
+    margin-bottom:-1px;
+  }
+  .tab-btn svg{width:18px;height:18px;stroke:currentColor;fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .tab-btn[aria-selected="true"]{color:var(--blue); border-bottom-color:var(--cyan);}
+  .tab-btn:hover{color:var(--blue);}
+
+  main{max-width:1280px; margin:0 auto; padding:24px;}
+  section.panel{display:none;}
+  section.panel.active{display:block;}
+
+  /* KPI cards */
+  .kpi-grid{
+    display:grid;
+    grid-template-columns:repeat(5, 1fr);
+    gap:14px;
+    margin-bottom:22px;
+  }
+  .kpi-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:16px;
+    display:flex; flex-direction:column; gap:10px;
+  }
+  .kpi-icon{
+    width:36px;height:36px;border-radius:9px;
+    background:var(--sky);
+    display:flex;align-items:center;justify-content:center;
+  }
+  .kpi-icon svg{width:19px;height:19px;stroke:var(--blue);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;}
+  .kpi-icon.red svg{stroke:var(--red);}
+  .kpi-name{font-size:12.5px; color:var(--text-dim); font-weight:600; line-height:1.35; min-height:34px;}
+  .kpi-value{font-size:22px; font-weight:700; letter-spacing:-.2px;}
+  .kpi-value .unit{font-size:12px; font-weight:500; color:var(--text-dim); margin-left:4px;}
+  .kpi-change{display:flex; align-items:center; gap:5px; font-size:12.5px; font-weight:600;}
+  .kpi-change.up{color:var(--up);}
+  .kpi-change.down{color:var(--down);}
+  .kpi-change.neutral{color:var(--neutral);}
+  .kpi-change.base{color:var(--text-dim); font-weight:500;}
+
+  /* Charts */
+  .chart-grid{
+    display:grid;
+    grid-template-columns:repeat(2, 1fr);
+    gap:14px;
+  }
+  .chart-card{
+    background:var(--surface);
+    border:1px solid var(--border);
+    border-radius:14px;
+    padding:16px 16px 10px;
+  }
+  .chart-card.wide{grid-column:1 / -1;}
+  .chart-card h3{margin:0 0 10px; font-size:13.5px; font-weight:700; color:var(--text);}
+  .chart-card h3 .sub{display:block; font-size:11.5px; font-weight:500; color:var(--text-dim); margin-top:1px;}
+  .chart-box{position:relative; height:230px;}
+  .chart-box.combined{height:360px;}
+
+  /* Legend */
+  .legend{
+    display:flex; flex-wrap:wrap; gap:18px;
+    margin:20px 2px 0; padding:14px 16px;
+    background:var(--surface); border:1px solid var(--border); border-radius:12px;
+    font-size:12.5px; color:var(--text-dim);
+  }
+  .legend-item{display:flex; align-items:center; gap:7px;}
+  .legend-swatch{width:14px;height:14px;border-radius:4px; flex:none;}
+  .legend-swatch.line{height:3px; border-radius:2px;}
+  .legend-swatch.dashed{height:0; border-top:2.5px dashed var(--est); width:16px; border-radius:0;}
+
+  footer.sources{
+    max-width:1280px; margin:22px auto 40px; padding:16px 24px 0;
+    font-size:12px; line-height:1.6; color:var(--text-dim);
+  }
+  footer.sources h4{margin:0 0 6px; font-size:12.5px; color:var(--text);}
+  footer.sources strong{color:var(--text);}
+
+  /* Responsive */
+  @media (max-width:1100px){
+    .kpi-grid{grid-template-columns:repeat(3, 1fr);}
+    .chart-grid{grid-template-columns:repeat(2, 1fr);}
+  }
+  @media (max-width:700px){
+    .kpi-grid{grid-template-columns:repeat(2, 1fr);}
+    .chart-grid{grid-template-columns:1fr;}
+    main{padding:16px;}
+    .topbar{padding:14px 16px;}
+    nav.tabs{padding:0 16px;}
+    .chart-box.combined{height:320px;}
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <div class="topbar-inner">
+    <div class="brand">
+      <div class="brand-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2c4.2 5.1 7 8.8 7 12.6A7 7 0 1 1 5 14.6C5 10.8 7.8 7.1 12 2Z"/></svg>
+      </div>
+      <div class="brand-text">
+        <h1>КазМунайГаз: операционная эффективность</h1>
+        <p>Ключевые показатели группы за 2020–2025 годы</p>
+      </div>
+    </div>
+    <div class="year-switch" role="group" aria-label="Выбор отчётного года" id="yearSwitch"></div>
+  </div>
+</header>
+
+<nav class="tabs" role="tablist" aria-label="Разделы дашборда">
+  <button class="tab-btn" id="tab-production" role="tab" aria-selected="true" aria-controls="panel-production">
+    <svg viewBox="0 0 24 24"><path d="M12 2l5 14H7L12 2Z"/><path d="M4 22h16"/><path d="M8.3 14h7.4"/><path d="M6.6 18.5h10.8"/></svg>
+    Производственная эффективность
+  </button>
+  <button class="tab-btn" id="tab-economic" role="tab" aria-selected="false" aria-controls="panel-economic">
+    <svg viewBox="0 0 24 24"><path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/></svg>
+    Экономическая эффективность
+  </button>
+</nav>
+
+<main>
+  <section class="panel active" id="panel-production" role="tabpanel" aria-labelledby="tab-production">
+    <div class="kpi-grid" id="kpi-production"></div>
+    <div class="chart-grid" id="charts-production"></div>
+  </section>
+
+  <section class="panel" id="panel-economic" role="tabpanel" aria-labelledby="tab-economic">
+    <div class="kpi-grid" id="kpi-economic"></div>
+    <div class="chart-grid" id="charts-economic"></div>
+  </section>
+
+  <div class="legend" id="legendBlock"></div>
+</main>
+
+<footer class="sources">
+  <h4>Об источнике данных</h4>
+  <p>Значения за 2020–2024 годы приведены приблизительно по публичным годовым отчётам и пресс-релизам АО НК «КазМунайГаз» (консолидированные данные группы). Значения за <strong>2025 год являются оценкой</strong>. Температура — приблизительно по данным РГП «Казгидромет». Наименее надёжные значения: численность персонала, ROACE, общий долг (пересчёт из долларов США по приблизительному курсу) и температура.</p>
+  <p><strong>Перед использованием в официальных материалах все значения подлежат сверке с первоисточниками.</strong></p>
+</footer>
+
+<script>
+(function(){
+"use strict";
+
+/* ---------------------------------------------------------------- */
+/* Данные (раздел 7 ТЗ)                                              */
+/* ---------------------------------------------------------------- */
+const YEARS = [2020, 2021, 2022, 2023, 2024, 2025];
+
+const DATA = {
+  oil:        [21752, 21708, 21824, 23021, 23512, 24600],
+  transport:  [74958, 74673, 74262, 80334, 80800, 83000],
+  refining:   [17986, 18868, 19876, 19857, 19612, 20100],
+  gas:        [8113, 8091, 8067, 9346, 9600, 10000],
+  headcount:  [61.3, 59.0, 57.1, 56.4, 55.8, 55.0],
+
+  revenue:    [5111452, 7117917, 10401000, 8429000, 8760000, 8900000],
+  ebitda:     [834000, 1738000, 2410000, 2177000, 2130000, 2050000],
+  netProfit:  [499000, 1197000, 1370000, 1107000, 1212000, 1050000],
+  roace:      [3.4, 9.6, 13.5, 10.9, 10.2, 9.0],
+
+  debt:       [4226000, 4060000, 3830000, 3720000, 4040000, 4100000],
+  temp:       [8.0, 7.0, 7.6, 8.2, 7.4, 7.9]
+};
+// Рентабельность по EBITDA считается, а не хранится (п.5.2)
+DATA.ebitdaMargin = DATA.ebitda.map((e,i)=> Math.round((e / DATA.revenue[i] * 100) * 10) / 10);
+
+/* ---------------------------------------------------------------- */
+/* Иконки (линейные SVG, stroke-width 1.8)                           */
+/* ---------------------------------------------------------------- */
+const ICONS = {
+  rig:      '<path d="M12 2l5 14H7L12 2Z"/><path d="M4 22h16"/><path d="M8.3 14h7.4"/><path d="M6.6 18.5h10.8"/>',
+  pipeline: '<rect x="2" y="9" width="20" height="6" rx="3"/><path d="M6 9v6M18 9v6"/>',
+  refinery: '<path d="M3 21V10.5l3.5-2.5 3.5 2.5V21"/><path d="M11 21V6l4-2.2L19 6v15"/><path d="M2.5 21h19"/>',
+  flame:    '<path d="M12 2c2.1 3-1 4.2-1 7.2a3 3 0 0 0 6 0c0-1-.4-2-1-3 2.2 1.3 4.5 4.3 4.5 7.3a7 7 0 1 1-14 0C6.5 9 9 7 12 2Z"/>',
+  people:   '<circle cx="8.5" cy="8" r="3"/><path d="M2.5 21v-1.6a5 5 0 0 1 5-5h2a5 5 0 0 1 5 5V21"/><circle cx="17.5" cy="8.3" r="2.3"/><path d="M15.6 21v-1.3a4.6 4.6 0 0 1 6-4.4"/>',
+  tenge:    '<circle cx="12" cy="12" r="9.2"/><path d="M8.5 9h7M8.5 12h7M12 7v10M9.3 19h5.4"/>',
+  diagram:  '<path d="M4 20V10"/><path d="M10 20V4"/><path d="M16 20v-7"/><path d="M3 20h18"/>',
+  banknote: '<rect x="2" y="6.5" width="20" height="11" rx="2.2"/><circle cx="12" cy="12" r="2.6"/><path d="M5.5 9.3h.01M18.5 14.7h.01"/>',
+  percent:  '<circle cx="7.2" cy="7.2" r="2.5"/><circle cx="16.8" cy="16.8" r="2.5"/><path d="M18.5 5.5 5.5 18.5"/>',
+  target:   '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="4.8"/><circle cx="12" cy="12" r="1" fill="currentColor" stroke="none"/>'
+};
+function iconSvg(name){ return '<svg viewBox="0 0 24 24">'+ICONS[name]+'</svg>'; }
+
+/* ---------------------------------------------------------------- */
+/* Метрики по разделам                                                */
+/* ---------------------------------------------------------------- */
+const SECTIONS = {
+  production: {
+    kpiTarget:'kpi-production', chartTarget:'charts-production',
+    metrics:[
+      {id:'oil',       name:'Добыча нефти и газового конденсата', unit:'тыс. тонн', icon:'rig',      type:'bar',  data:DATA.oil},
+      {id:'transport', name:'Транспортировка нефти',               unit:'тыс. тонн', icon:'pipeline', type:'bar',  data:DATA.transport},
+      {id:'refining',  name:'Переработка углеводородного сырья',   unit:'тыс. тонн', icon:'refinery', type:'bar',  data:DATA.refining},
+      {id:'gas',       name:'Добыча природного и попутного газа',  unit:'млн м³',    icon:'flame',     type:'bar',  data:DATA.gas},
+      {id:'headcount', name:'Среднесписочная численность персонала', unit:'тыс. человек', icon:'people', iconRed:true, type:'combined', data:DATA.headcount}
+    ]
+  },
+  economic: {
+    kpiTarget:'kpi-economic', chartTarget:'charts-economic',
+    metrics:[
+      {id:'revenue',      name:'Выручка',  unit:'млн тенге', icon:'tenge',   type:'bar',  money:true, data:DATA.revenue},
+      {id:'ebitda',       name:'EBITDA',   unit:'млн тенге', icon:'diagram', type:'bar',  money:true, data:DATA.ebitda},
+      {id:'netProfit',    name:'Чистая прибыль', unit:'млн тенге', icon:'banknote', type:'bar', money:true, data:DATA.netProfit},
+      {id:'ebitdaMargin', name:'Рентабельность по EBITDA', unit:'%', icon:'percent', type:'line', relative:true, data:DATA.ebitdaMargin},
+      {id:'roace',        name:'Рентабельность капитала (ROACE)', unit:'%', icon:'target', type:'line', relative:true, data:DATA.roace}
+    ]
+  }
+};
+
+/* ---------------------------------------------------------------- */
+/* Состояние                                                          */
+/* ---------------------------------------------------------------- */
+let selectedYear = 2024;
+let activeTab = 'production';
+const charts = {}; // id -> Chart instance
+
+/* ---------------------------------------------------------------- */
+/* Утилиты форматирования                                             */
+/* ---------------------------------------------------------------- */
+function fmt(n, maxDec){
+  return n.toLocaleString('ru-RU', {maximumFractionDigits: maxDec==null?0:maxDec, minimumFractionDigits:0});
+}
+function trillion(nMln){ return (nMln/1e6).toLocaleString('ru-RU',{maximumFractionDigits:1,minimumFractionDigits:1}); }
+
+function theme(varName){
+  return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+}
+
+function computeChange(metric, yearIdx){
+  if(yearIdx === 0) return {base:true, text:'Базовый год'};
+  const curr = metric.data[yearIdx], prev = metric.data[yearIdx-1];
+  let change, unitLabel;
+  if(metric.relative){ change = curr - prev; unitLabel = 'п.п.'; }
+  else { change = prev !== 0 ? (curr - prev) / Math.abs(prev) * 100 : 0; unitLabel = '%'; }
+  const abs = Math.abs(change);
+  if(abs < 0.05) return {cls:'neutral', symbol:'■', text: (change>=0?'+':'') + change.toFixed(1) + ' ' + unitLabel};
+  if(change > 0) return {cls:'up', symbol:'▲', text:'+' + change.toFixed(1) + ' ' + unitLabel};
+  return {cls:'down', symbol:'▼', text: change.toFixed(1) + ' ' + unitLabel};
+}
+
+/* ---------------------------------------------------------------- */
+/* Рендер шапки — переключатель года                                  */
+/* ---------------------------------------------------------------- */
+function renderYearSwitch(){
+  const el = document.getElementById('yearSwitch');
+  el.innerHTML = YEARS.map(y=>{
+    const est = y===2025;
+    return '<button class="year-btn" data-year="'+y+'" aria-pressed="'+(y===selectedYear)+'">'+y+(est?'<sup>о</sup>':'')+'</button>';
+  }).join('');
+  el.querySelectorAll('.year-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=> setYear(parseInt(btn.dataset.year,10)));
+  });
+}
+
+function setYear(year){
+  selectedYear = year;
+  document.querySelectorAll('.year-btn').forEach(b=> b.setAttribute('aria-pressed', String(parseInt(b.dataset.year,10)===year)));
+  renderKpis('production');
+  renderKpis('economic');
+  renderCharts(activeTab); // скрытая вкладка перестраивается при переключении на неё (setTab)
+  renderLegend();
+}
+
+/* ---------------------------------------------------------------- */
+/* Вкладки                                                            */
+/* ---------------------------------------------------------------- */
+document.getElementById('tab-production').addEventListener('click', ()=> setTab('production'));
+document.getElementById('tab-economic').addEventListener('click', ()=> setTab('economic'));
+
+function setTab(tab){
+  activeTab = tab;
+  document.getElementById('tab-production').setAttribute('aria-selected', String(tab==='production'));
+  document.getElementById('tab-economic').setAttribute('aria-selected', String(tab==='economic'));
+  document.getElementById('panel-production').classList.toggle('active', tab==='production');
+  document.getElementById('panel-economic').classList.toggle('active', tab==='economic');
+  renderCharts(tab); // строим/обновляем графики только что показанной вкладки (canvas уже видим, размер корректен)
+  renderLegend();
+}
+
+/* ---------------------------------------------------------------- */
+/* KPI-карточки                                                       */
+/* ---------------------------------------------------------------- */
+function renderKpis(sectionKey){
+  const section = SECTIONS[sectionKey];
+  const yearIdx = YEARS.indexOf(selectedYear);
+  const el = document.getElementById(section.kpiTarget);
+  el.innerHTML = section.metrics.map(m=>{
+    const val = m.data[yearIdx];
+    const change = computeChange(m, yearIdx);
+    const valueStr = m.relative ? val.toFixed(1) : fmt(val, m.id==='headcount'?1:0);
+    const changeHtml = change.base
+      ? '<div class="kpi-change base">Базовый год</div>'
+      : '<div class="kpi-change '+change.cls+'">'+change.symbol+' '+change.text+'</div>';
+    return '<div class="kpi-card">'+
+      '<div class="kpi-icon'+(m.iconRed?' red':'')+'">'+iconSvg(m.icon)+'</div>'+
+      '<div class="kpi-name">'+m.name+'</div>'+
+      '<div class="kpi-value">'+valueStr+'<span class="unit">'+m.unit+'</span></div>'+
+      changeHtml+
+      '</div>';
+  }).join('');
+}
+
+/* ---------------------------------------------------------------- */
+/* Графики — обычные (по одному показателю)                           */
+/* ---------------------------------------------------------------- */
+function destroyChart(id){
+  if(charts[id]){ charts[id].destroy(); delete charts[id]; }
+}
+
+function barColors(metric){
+  return YEARS.map(y=>{
+    if(y === selectedYear) return theme('--cyan');
+    if(y === 2025) return theme('--est');
+    return theme('--blue');
+  });
+}
+
+function buildBarChart(canvas, metric){
+  const colors = barColors(metric);
+  const labelPlugin = {
+    id: 'selYearLabel-'+metric.id,
+    afterDatasetsDraw(chart){
+      const idx = YEARS.indexOf(selectedYear);
+      const meta = chart.getDatasetMeta(0);
+      const bar = meta.data[idx];
+      if(!bar) return;
+      const {ctx} = chart;
+      const val = metric.data[idx];
+      const text = metric.money ? trillion(val)+' трлн' : fmt(val, 0);
+      ctx.save();
+      ctx.fillStyle = theme('--text');
+      ctx.font = '700 12px "Golos Text", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(text, bar.x, bar.y - 8);
+      ctx.restore();
+    }
+  };
+  return new Chart(canvas, {
+    type:'bar',
+    data:{
+      labels: YEARS.map(y=> y===2025 ? y+'о' : ''+y),
+      datasets:[{
+        data: metric.data,
+        backgroundColor: colors,
+        borderRadius:5,
+        maxBarThickness:46
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation: reducedMotion() ? false : {duration:280},
+      onClick:(evt, elements)=>{
+        if(elements && elements.length){ setYear(YEARS[elements[0].index]); }
+      },
+      onHover:(evt, elements)=>{ evt.native.target.style.cursor = elements.length ? 'pointer':'default'; },
+      scales:{
+        x:{ grid:{display:false}, ticks:{color: theme('--text-dim'), font:{size:11,weight:'600'}} },
+        y:{
+          grid:{color: theme('--grid')},
+          ticks:{
+            color: theme('--text-dim'), font:{size:10.5},
+            callback: v => metric.money ? trillion(v)+' трлн' : fmt(v,0)
+          },
+          beginAtZero:true
+        }
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor: theme('--navy'), padding:10, cornerRadius:8,
+          titleFont:{weight:'700'}, bodyFont:{size:12.5},
+          callbacks:{
+            label: ctx => metric.money
+              ? fmt(ctx.parsed.y,0)+' млн тенге'
+              : fmt(ctx.parsed.y, metric.id==='headcount'?1:0)+' '+metric.unit
+          }
+        }
+      }
+    },
+    plugins:[labelPlugin]
+  });
+}
+
+function buildLineChart(canvas, metric){
+  const pointColors = YEARS.map(y=> y===selectedYear ? theme('--cyan') : (y===2025 ? theme('--est') : theme('--blue')));
+  const pointRadii = YEARS.map(y=> y===selectedYear ? 6 : 4);
+  const labelPlugin = {
+    id:'selYearLabelLine-'+metric.id,
+    afterDatasetsDraw(chart){
+      const idx = YEARS.indexOf(selectedYear);
+      const meta = chart.getDatasetMeta(0);
+      const pt = meta.data[idx];
+      if(!pt) return;
+      const {ctx} = chart;
+      ctx.save();
+      ctx.fillStyle = theme('--text');
+      ctx.font = '700 12px "Golos Text", sans-serif';
+      ctx.textAlign = 'center';
+      ctx.fillText(metric.data[idx].toFixed(1)+'%', pt.x, pt.y - 12);
+      ctx.restore();
+    }
+  };
+  return new Chart(canvas, {
+    type:'line',
+    data:{
+      labels: YEARS.map(y=> y===2025 ? y+'о' : ''+y),
+      datasets:[{
+        data: metric.data,
+        borderColor: theme('--blue'),
+        backgroundColor: 'transparent',
+        borderWidth:2.5,
+        pointBackgroundColor: pointColors,
+        pointBorderColor: pointColors,
+        pointRadius: pointRadii,
+        pointHoverRadius: 7,
+        tension:0.25,
+        segment:{
+          borderDash: ctx => (ctx.p1DataIndex === YEARS.length-1) ? [6,4] : undefined,
+          borderColor: ctx => (ctx.p1DataIndex === YEARS.length-1) ? theme('--est') : theme('--blue')
+        }
+      }]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation: reducedMotion() ? false : {duration:280},
+      onClick:(evt, elements)=>{
+        if(elements && elements.length){ setYear(YEARS[elements[0].index]); }
+      },
+      onHover:(evt, elements)=>{ evt.native.target.style.cursor = elements.length ? 'pointer':'default'; },
+      scales:{
+        x:{ grid:{display:false}, ticks:{color: theme('--text-dim'), font:{size:11,weight:'600'}} },
+        y:{ grid:{color: theme('--grid')}, ticks:{color: theme('--text-dim'), font:{size:10.5}, callback:v=>v+'%'} }
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor: theme('--navy'), padding:10, cornerRadius:8,
+          titleFont:{weight:'700'}, bodyFont:{size:12.5},
+          callbacks:{ label: ctx => ctx.parsed.y.toFixed(1)+' %' }
+        }
+      }
+    },
+    plugins:[labelPlugin]
+  });
+}
+
+/* ---------------------------------------------------------------- */
+/* Комбинированный график (раздел 6)                                  */
+/* ---------------------------------------------------------------- */
+function buildCombinedChart(canvas){
+  const oilColors = YEARS.map(y=> y===selectedYear ? theme('--cyan') : (y===2025 ? theme('--est') : theme('--blue')));
+  const headRadii = YEARS.map(y=> y===selectedYear ? 6 : 3.5);
+
+  const combinedLabels = {
+    id:'combinedLabels',
+    afterDatasetsDraw(chart){
+      const {ctx} = chart;
+      ctx.save();
+      ctx.font = '700 11px "Golos Text", sans-serif';
+      ctx.textAlign = 'center';
+
+      // долг — подпись у каждого столбца "X,X трлн"
+      const debtMeta = chart.getDatasetMeta(1);
+      ctx.fillStyle = theme('--debt');
+      debtMeta.data.forEach((bar,i)=>{
+        ctx.fillText(trillion(DATA.debt[i])+' трлн', bar.x, bar.y - 6);
+      });
+
+      // численность — подпись только выбранного года
+      const idx = YEARS.indexOf(selectedYear);
+      const headMeta = chart.getDatasetMeta(2);
+      const hp = headMeta.data[idx];
+      if(hp){
+        ctx.fillStyle = theme('--red');
+        ctx.fillText(DATA.headcount[idx].toFixed(1), hp.x, hp.y - 12);
+      }
+
+      // температура — подписи у всех точек
+      const tempMeta = chart.getDatasetMeta(3);
+      ctx.fillStyle = theme('--temp');
+      tempMeta.data.forEach((pt,i)=>{
+        const v = DATA.temp[i];
+        ctx.fillText((v>0?'+':'')+v.toFixed(1)+'°', pt.x, pt.y - 10);
+      });
+
+      ctx.restore();
+    }
+  };
+
+  return new Chart(canvas, {
+    data:{
+      labels: YEARS.map(y=> y===2025 ? y+'о' : ''+y),
+      datasets:[
+        {
+          type:'bar', label:'Добыча нефти и конденсата',
+          data: DATA.oil, backgroundColor: oilColors, borderRadius:4,
+          yAxisID:'y', order:3, maxBarThickness:34
+        },
+        {
+          type:'bar', label:'Общий долг группы',
+          data: DATA.debt, backgroundColor: theme('--debt'), borderRadius:4,
+          yAxisID:'y1', order:3, maxBarThickness:34
+        },
+        {
+          type:'line', label:'Численность персонала',
+          data: DATA.headcount, borderColor: theme('--red'), backgroundColor:'transparent',
+          borderWidth:2.5, pointBackgroundColor: theme('--red'), pointBorderColor: theme('--red'),
+          pointRadius: headRadii, pointHoverRadius:7, tension:0.25,
+          yAxisID:'y2', order:1
+        },
+        {
+          type:'line', label:'Средняя годовая температура',
+          data: DATA.temp, borderColor: theme('--temp'), backgroundColor:'transparent',
+          borderDash:[5,4], borderWidth:2, pointStyle:'rectRot',
+          pointBackgroundColor: theme('--temp'), pointBorderColor: theme('--temp'),
+          pointRadius:5, pointHoverRadius:7, tension:0.2,
+          yAxisID:'y3', order:0
+        }
+      ]
+    },
+    options:{
+      responsive:true, maintainAspectRatio:false,
+      animation: reducedMotion() ? false : {duration:280},
+      interaction:{mode:'index', intersect:false},
+      onClick:(evt, elements)=>{
+        if(elements && elements.length){ setYear(YEARS[elements[0].index]); }
+      },
+      onHover:(evt, elements)=>{ evt.native.target.style.cursor = elements.length ? 'pointer':'default'; },
+      scales:{
+        x:{ grid:{display:false}, ticks:{color: theme('--text-dim'), font:{size:11,weight:'600'}} },
+        y:{
+          position:'left', min:0, max:60000, display:true,
+          grid:{color: theme('--grid')},
+          ticks:{color: theme('--blue'), font:{size:10}, callback:v=>fmt(v,0)},
+          title:{display:true, text:'тыс. тонн', color: theme('--text-dim'), font:{size:10.5}}
+        },
+        y1:{ position:'right', min:0, max:9500000, display:false },
+        y2:{
+          position:'right', min:20, max:75, display:true,
+          grid:{drawOnChartArea:false},
+          ticks:{color: theme('--red'), font:{size:10}},
+          title:{display:true, text:'тыс. человек', color: theme('--text-dim'), font:{size:10.5}}
+        },
+        y3:{ min:-25, max:12, display:false }
+      },
+      plugins:{
+        legend:{display:false},
+        tooltip:{
+          backgroundColor: theme('--navy'), padding:12, cornerRadius:8,
+          titleFont:{weight:'700'}, bodyFont:{size:12.5}, bodySpacing:5,
+          callbacks:{
+            title: items => (items[0] && items[0].label) ? items[0].label.replace('о',' (оценка)') : '',
+            label: ctx => {
+              const i = ctx.dataIndex;
+              if(ctx.dataset.label==='Добыча нефти и конденсата') return 'Добыча: '+fmt(DATA.oil[i],0)+' тыс. тонн';
+              if(ctx.dataset.label==='Общий долг группы') return 'Долг: '+trillion(DATA.debt[i])+' трлн тенге';
+              if(ctx.dataset.label==='Численность персонала') return 'Численность: '+DATA.headcount[i].toFixed(1)+' тыс. человек';
+              if(ctx.dataset.label==='Средняя годовая температура') return 'Температура: '+(DATA.temp[i]>0?'+':'')+DATA.temp[i].toFixed(1)+' °C';
+              return '';
+            },
+            afterBody: items => {
+              const i = items[0].dataIndex;
+              const perWorker = DATA.oil[i] / DATA.headcount[i] / 1000;
+              return ['', 'Добыча на 1 работника: '+perWorker.toFixed(3)+' тыс. тонн'];
+            }
+          }
+        }
+      }
+    },
+    plugins:[combinedLabels]
+  });
+}
+
+function reducedMotion(){
+  return window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+}
+
+/* ---------------------------------------------------------------- */
+/* Сборка графиков секции                                             */
+/* ---------------------------------------------------------------- */
+function renderCharts(sectionKey){
+  const section = SECTIONS[sectionKey];
+  const target = document.getElementById(section.chartTarget);
+  target.innerHTML = '';
+
+  section.metrics.forEach(m=>{
+    if(m.type === 'combined') return; // отдельный график не строится, см. комбинированный
+    const card = document.createElement('div');
+    card.className = 'chart-card';
+    card.innerHTML = '<h3>'+m.name+'<span class="sub">'+m.unit+'</span></h3><div class="chart-box"><canvas aria-label="График: '+m.name+'" role="img"></canvas></div>';
+    target.appendChild(card);
+    const canvas = card.querySelector('canvas');
+    destroyChart(m.id);
+    charts[m.id] = m.type==='bar' ? buildBarChart(canvas, m) : buildLineChart(canvas, m);
+  });
+
+  if(sectionKey === 'production'){
+    const wide = document.createElement('div');
+    wide.className = 'chart-card wide';
+    wide.innerHTML = '<h3>Численность персонала, добыча нефти, долг и температура<span class="sub">Сводная динамика по году, тыс. человек / тыс. тонн / млн тенге / °C</span></h3>'+
+      '<div class="chart-box combined"><canvas aria-label="Комбинированный график: численность персонала, добыча нефти, долг и температура" role="img"></canvas></div>';
+    target.appendChild(wide);
+    const canvas = wide.querySelector('canvas');
+    destroyChart('combined');
+    charts.combined = buildCombinedChart(canvas);
+  }
+}
+
+/* ---------------------------------------------------------------- */
+/* Легенда                                                            */
+/* ---------------------------------------------------------------- */
+function renderLegend(){
+  const el = document.getElementById('legendBlock');
+  const items = [
+    '<div class="legend-item"><span class="legend-swatch" style="background:'+theme('--cyan')+'"></span>Выбранный год</div>',
+    '<div class="legend-item"><span class="legend-swatch" style="background:'+theme('--blue')+'"></span>Факт</div>',
+    '<div class="legend-item"><span class="legend-swatch" style="background:'+theme('--est')+'"></span>2025 — оценка</div>'
+  ];
+  if(activeTab === 'production'){
+    items.push('<div class="legend-item"><span class="legend-swatch line" style="background:'+theme('--red')+'"></span>Численность персонала</div>');
+    items.push('<div class="legend-item"><span class="legend-swatch line" style="background:'+theme('--debt')+'"></span>Общий долг группы</div>');
+    items.push('<div class="legend-item"><span class="legend-swatch dashed"></span>Температура (пунктир)</div>');
+  }
+  el.innerHTML = items.join('');
+}
+
+/* ---------------------------------------------------------------- */
+/* Полный рендер                                                      */
+/* ---------------------------------------------------------------- */
+function renderAll(){
+  Chart.defaults.font.family = "'Golos Text', system-ui, sans-serif";
+  renderKpis('production');
+  renderKpis('economic');
+  renderCharts(activeTab); // вторая вкладка строится лениво, при первом переключении на неё (см. setTab)
+  renderLegend();
+}
+
+renderYearSwitch();
+renderAll();
+
+/* Перерисовка при смене темы ОС */
+window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', renderAll);
+
+})();
+</script>
+</body>
+</html>
